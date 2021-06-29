@@ -6,8 +6,8 @@
 
 int main(int* argc, char** argv)
 {
-	int numtasks, rank;
-	int mes = 0, procNum = 0;
+	int numprocs, rank;
+	int mes = 0;
 
 	bool finished = false;
 	MPI_Status status;
@@ -15,11 +15,11 @@ int main(int* argc, char** argv)
 
 	MPI_Init(argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
+	MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
 
 	if (rank == 0)
 	{
-		std::cout << "Num of all tasks: " << numtasks << std::endl;
+		std::cout << "Num of all processes: " << numprocs << std::endl;
 	}
 
 	while (!finished)
@@ -31,16 +31,18 @@ int main(int* argc, char** argv)
 
 			if (mes == -1)
 			{
-				std::cout << "Proc " << rank << " Get: " << mes << " From: " << status.MPI_SOURCE << " Counter: " << counter << " Proc finished" << std::endl;
+				std::cout << "Proc " << rank << " got " << mes << " from " << status.MPI_SOURCE
+					<< " Counter: " << counter << " Proc 0 finished" << std::endl;
 				finished = true;
-				for (int i = 1; i < numtasks; i++)
+				for (int i = 1; i < numprocs; i++)
 					MPI_Send(&mes, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
 			}
 
 			else
 			{
 				counter++;
-				std::cout << "Proc " << rank << " Get: " << mes << " From: " << status.MPI_SOURCE << " Counter: " << counter << std::endl;
+				std::cout << "Proc " << rank << " got " << mes << " from " << status.MPI_SOURCE 
+					<< " Counter: " << counter << std::endl;
 				MPI_Send(&mes, 1, MPI_INT, status.MPI_SOURCE, 0, MPI_COMM_WORLD);
 			}
 		}

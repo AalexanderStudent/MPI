@@ -4,83 +4,90 @@
 #include <Windows.h>
 #include <time.h>
 
-void eqNOne(int* in, int* out, int* len, MPI_Datatype* dptr)
-{
-	Sleep(10);
-	if (*in == -1)
-	{
-		*out = -1;
-	}
-	std::cout << "out:: " << *out << " " << *in << std::endl;
-}
-
 int main(int* argc, char** argv)
 {
-	int numtasks, rank;
-	int mes = 0, procNum = 0;
-
+	int numprocs, rank;
 	bool finished = false;
 	MPI_Status status;
+	int mes = 1;
+	int is_command;
+	int counter = 0;
 
 	MPI_Init(argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
+	MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
 
-	MPI_Op eqNOne;
-	MPI_Op_create((MPI_User_function*)eqNOne, 1, &eqNOne);
+	srand(time(NULL) + rank); // so every process will get different value of mes
 
-
-	srand(time(NULL) + rank);
 	if (rank == 0)
 	{
-		std::cout << "Num of all tasks: " << numtasks << std::endl;
-		Sleep(1);
+		std::cout << "Num of all processes: " << numprocs << std::endl;
 	}
 
 	int* buf = new int();
-	*buf = 0;
-
+	
 	while (!finished)
 	{
-
 		if (rank == 0)
 		{
-			Sleep(100);
-			static int counter = 0;
-			MPI_Reduce(&buf, &mes, 1, MPI_INT, eqNOne, 0, MPI_COMM_WORLD);
-
-			if (mes == -1)
+			MPI_Reduce(&buf, &mes, 1, MPI_INT, MPI_MIN, 0, MPI_COMM_WORLD);
+			is_command = mes;
+			// -1 -> send again though MPI_Send
+			// else -> continue while
+			MPI_Bcast(&is_command, 1, MPI_INT, 0, MPI_COMM_WORLD);
+			if (mes == -1) // there's -1 in the batch
 			{
 				finished = true;
-				std::cout << "Proc " << rank << " Get: " << mes << " Counter: " << counter << " Proc finished" << std::endl;
+				std::cout << "Proc " << rank << ". Got " << mes << ".\nCounter: " 
+					<< counter << ".\nProc finished" << std::endl;
+				int* final_pieces = new int[numprocs - 1];
+				for (int i = 1; i < numprocs; i++)
+				{
+					MPI_Recv(&final_pieces[i - 1], 1, MPI_INT, i, MPI_ANY_TAG,
+						MPI_COMM_WORLD, &status);
+					std::cout << "Left " << final_pieces[i - 1] << std::endl;
+				}
+				int i = 0;
+				while (final_pieces[i] != -1 && i < numprocs)
+				{
+					counter ++;
+					i++;
+					// increase counter until we reach -1 message
+				}
 			}
-			else
+			else // whole batch is not -1
 			{
-				counter += numtasks;
-				std::cout << "Proc " << rank << " Get not 1 " << " Counter: " << counter << std::endl;
-				if (counter >= 100)
-					finished = true;
+				counter += (numprocs - 1);
+				std::cout << "Proc " << rank << ". Did not get -1. " 
+					<< std::endl;
 			}
-			MPI_Bcast(&mes, 1, MPI_INT, 0, MPI_COMM_WORLD);
+			MPI_Barrier(MPI_COMM_WORLD);
+			//std::cout << "Barrier." << std::endl;
 		}
-
-		else
+		else 
 		{
-			mes = rand() % 50 - 1;
+			mes = rand() % 10 - 1;
 			*buf = mes;
-			Sleep(rank * 10);
-			MPI_Reduce(buf, &mes, 1, MPI_INT, eqNOne, 0, MPI_COMM_WORLD);
-			std::cout << "Proc " << rank << " Send " << mes << std::endl;
-			MPI_Bcast(&mes, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-			if (mes == -1)
+			
+			MPI_Reduce(&buf[0], &mes, 1, MPI_INT, MPI_MIN, 0, MPI_COMM_WORLD);
+			std::cout << "Proc " << rank << ". Send " << mes << std::endl;
+			MPI_Bcast(&is_command, 1, MPI_INT, 0, MPI_COMM_WORLD);
+			if (is_command == -1)
 			{
 				finished = true;
-				std::cout << "Proc " << rank << " finished" << std::endl;
+				MPI_Send(&mes, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+				std::cout << "Proc " << rank << " finished." << std::endl;
 			}
-			Sleep(1);
+			MPI_Barrier(MPI_COMM_WORLD);
+			//std::cout << "Barrier." << std::endl;
 		}
 	}
+	if (rank == 0)
+	{
+		std::cout << "\n Counter: " << counter << std::endl;
+	}
 	MPI_Finalize();
+	
 	return 0;
 }
+//Sleep(100);
